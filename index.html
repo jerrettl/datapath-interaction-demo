@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<style>
+			#popup {
+				display: none;
+				position: absolute;
+				background-color: #333333;
+				padding: 10px;
+			}
+
+			#popup .title, #popup .description, #popup .data {
+				color: #FFFFFF;
+				margin: 0;
+				font-family: 'Helvetica Neue', 'Helvetica', 'Arial', sans-serif;
+			}
+
+			#popup .title {
+				font-size: 1em;
+				margin-bottom: 0.2rem;
+			}
+
+			#popup .description, #popup .data {
+				font-size: 0.8em;
+			}
+
+			#popup .data {
+				margin-top: 0.7rem;
+			}
+
+			#popup .data .label {
+				font-weight: bold;
+			}
+
+			#popup .data .code {
+				font-family: 'Iosevka', 'Fira Code', monospace;
+			}
+		</style>
+	</head>
+	<body>
+		<div id="popup">
+			<h1 class="title">[Title]</h1>
+			<p class="description">[Description]</p>
+			<div class="data">
+				<span class="label">Value:</span>
+				<span class="code">[bits]</span>
+				<span class="meaning">([base 10] - [register])</span>
+			</div>
+		</div>
+		<object data="datapath.svg" type="image/svg+xml" id="datapath"></object>
+	</body>
+	<script>
+		const INACTIVE_COLOR = "#000000";
+		const ACTIVE_HOVERED_COLOR = "#FF0000";
+		const ACTIVE_UNHOVERED_COLOR = "#00FFFF";
+
+		// Set a line to be inactive.
+		function setInactive(path) {
+			path.style.cursor = "auto";
+			path.attributes["stroke"].nodeValue = INACTIVE_COLOR;
+
+			if (path.tagName == "ellipse") {
+				path.attributes["fill"].nodeValue = INACTIVE_COLOR;
+			}
+		}
+
+		// Set a line to be active and unhovered.
+		function setActiveUnhovered(path) {
+			console.log("BING BONG");
+			console.log(path);
+			path.style.cursor = "pointer";
+			path.attributes["stroke"].nodeValue = ACTIVE_UNHOVERED_COLOR;
+
+			if (path.tagName == "ellipse") {
+				path.attributes["fill"].nodeValue = ACTIVE_UNHOVERED_COLOR;
+			}
+		}
+
+		// Set a line to be active and hovered.
+		function setActiveHovered(path) {
+			path.attributes["stroke"].nodeValue = ACTIVE_HOVERED_COLOR;
+
+			if (path.tagName == "ellipse") {
+				path.attributes["fill"].nodeValue = ACTIVE_HOVERED_COLOR;
+			}
+		}
+
+		// Set a line to be active and unhovered. (Event version.)
+		function setActiveUnhoveredEvent(event) {
+			setActiveUnhovered(event.target);
+		}
+
+		// Set a line to be active and hovered. (Event version.)
+		function setActiveHoveredEvent(event) {
+			setActiveHovered(event.target);
+		}
+
+		const popup = document.getElementById('popup');
+		const title = popup.querySelector('.title');
+
+		function openPopupEvent(event) {
+			title.textContent = event.target.parentElement.id;
+			popup.style.display = "block";
+			popup.style.left = event.clientX + 20 + 'px';
+			popup.style.top = event.clientY + 20 + 'px';
+		}
+
+		function movePopupEvent(event) {
+			popup.style.left = event.clientX + 20 + 'px';
+			popup.style.top = event.clientY + 20 + 'px';
+		}
+
+		function closePopupEvent(event) {
+			popup.style.display = "none";
+		}
+
+		// Activates a given <g> tag.
+		function activateElement(element) {
+			Array.from(element.children).forEach((path) => {
+				setActiveUnhovered(path);
+
+				if (path.tagName == "path") {
+					path.addEventListener("mouseover", setActiveHoveredEvent);
+					path.addEventListener("mouseout", setActiveUnhoveredEvent);
+					path.addEventListener("mouseover", openPopupEvent);
+					path.addEventListener("mousemove", movePopupEvent);
+					path.addEventListener("mouseout", closePopupEvent);
+				}
+			});
+		}
+
+		// Deactivates a given <g> tag.
+		function deactivateElement(element) {
+			Array.from(element.children).forEach((path) => {
+				setInactive(path);
+
+				if (path.tagName == "path") {
+					path.removeEventListener("mouseover", setActiveHoveredEvent);
+					path.removeEventListener("mouseout", setActiveUnhoveredEvent);
+					path.removeEventListener("mouseover", openPopupEvent);
+					path.removeEventListener("mousemove", movePopupEvent);
+					path.removeEventListener("mouseout", closePopupEvent);
+				}
+			});
+		}
+
+		// Highlight and enable interactivity for all lines in a given stage.
+		// Consequently un-highlights and disables interactivity for all other lines.
+		// Valid strings in "stage" parameter:
+		//  - instruction_fetch
+		//  - instruction_decode
+		//  - execute
+		//  - memory
+		//  - writeback
+		function highlightStage(nodes, stage) {
+			Array.from(nodes).forEach((el) => {
+				if (el.attributes["data-stage"] == undefined)	{
+					// Do nothing if the line has no defined stage.
+				} else if (el.attributes["data-stage"].nodeValue == stage) {
+					// This is an element we want. Highlight it.
+					console.log(el);
+
+					activateElement(el);
+				} else {
+					// Not an element we want. Stop highlighting it.
+					deactivateElement(el);
+				}
+			});
+		}
+
+		// Make the SVG interact-able.
+		function preprocessDatapath(event) {
+			let dp = event.target;
+
+			// This gives all the <g> tags.
+			let nodes = dp.contentDocument.firstElementChild.querySelector("g").children;
+
+			Array.from(nodes).forEach((g) => {
+				if (g.attributes["data-stage"] != undefined)	{
+					Array.from(g.children).forEach((path) => {
+						console.log(path);
+						// Allow the path to have event listeners.
+						path.attributes["pointer-events"].nodeValue = "stroke";
+
+						if (path.tagName == "ellipse") {
+							// Remove the large <rect> surrounding the ellipse. It covers up elements and is stupid.
+							let rects = path.parentElement.getElementsByTagName("rect");
+							Array.from(rects).forEach((rect) => {
+								rect.remove();
+							});
+						}
+					});
+				}
+			});
+
+			// FOR DEMO:
+			// Set a default stage to highlight.
+			highlightStage(nodes, "instruction_decode");
+		}
+
+		const dp = document.getElementById("datapath");
+		dp.addEventListener("load", preprocessDatapath);
+	</script>
+</html>
